@@ -241,3 +241,6 @@ void loop() {
   // put your main code here, to run repeatedly:
 
 }
+
+//giving credit to: https://blog.csdn.net/mculover666/category_10403120.html
+//This code took the blog as reference to build an example of RSA operation in mbedtls  
