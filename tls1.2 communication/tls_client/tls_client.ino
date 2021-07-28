@@ -38,8 +38,8 @@ boolean error = false;
 void setup() {
   Serial.begin(115200);
   Serial.println("TLS Client running... \n");
-  const char* ssid = "TP-Link_82F4";
-  const char* password =  "31208499";
+  const char* ssid = "";
+  const char* password =  "";
 
   String ip_str;
   WiFi.begin(ssid, password);
