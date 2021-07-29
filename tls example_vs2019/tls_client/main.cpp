@@ -52,7 +52,7 @@ int main() {
     //initialize context
     mbedtls_x509_crt_init(&ca_cert);
     /* 2. Parse CA cert */
-    printf("\n  . Parse cacert...");
+    printf("\n  . Parse cacert...\n");
 
     ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_cert_buf, sizeof(ca_cert_buf));
     if (ret != 0) {
@@ -65,7 +65,7 @@ int main() {
 
 
     /* 2. Load CA cert info into buffer and then show */
-    printf("\n  . CA Cert Information: ");
+    printf("\n  . CA Cert Information: \n");
 
     ret = mbedtls_x509_crt_info(buf, sizeof(buf) - 1, "      ", &ca_cert);
     if (ret < 0) {
@@ -85,7 +85,7 @@ int main() {
     mbedtls_ctr_drbg_init(&ctr_drbg);
     mbedtls_entropy_init(&entropy);
 
-    printf("\n  . Seeding the random bit generator...");
+    printf("\n  . Seeding the random bit generator...\n");
     ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
         (const unsigned char*)pers,
         strlen(pers));
@@ -105,10 +105,10 @@ int main() {
 
     ret = mbedtls_net_bind(&listening_ctx, "127.0.0.1", "81", MBEDTLS_NET_PROTO_TCP);
     if (ret != 0) {
-        printf("Socket Binding Failed");
+        printf("Socket Binding Failed\n");
     }
     else {
-        printf("Socket Binding Succeeded");
+        printf("Socket Binding Succeeded\n");
     }
 
     //exit:
@@ -118,14 +118,14 @@ int main() {
     //  printf("Program Finished");
 
 
-    printf("Connecting 127.0.0.1:443");
+    printf("Connecting 127.0.0.1:443\n");
     //connect to server
     ret = mbedtls_net_connect(&server_ctx, "127.0.0.1", "443", MBEDTLS_NET_PROTO_TCP);
     if (ret != 0) {
-        printf("Connection Failed!");
+        printf("Connection Failed!\n");
     }
     else {
-        printf("Connected to server!");
+        printf("Connected to server!\n");
     }
 
     //Initialise as an SSL-server (SSL/TLS interface)
@@ -134,31 +134,31 @@ int main() {
     ret = mbedtls_ssl_config_defaults(&ssl_conf, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
 
     if (ret != 0) {
-        printf("ssl config error!");
-        printf("Error Code is: %d", ret);
+        printf("ssl config error!\n");
+        printf("Error Code is: %d\n", ret);
     }
     else {
-        printf("Successfully set the default config!");
+        printf("Successfully set the default config!\n");
     }
     //set the authenication mode. It determines how strictly the certificates are checked.
-    printf("Setting auth mode!");
+    printf("Setting auth mode!\n");
     //mbedtls_ssl_conf_authmode( &ssl_conf, MBEDTLS_SSL_VERIFY_NONE );
     mbedtls_ssl_conf_authmode(&ssl_conf, MBEDTLS_SSL_VERIFY_REQUIRED);
     //Set callback functions RNG, IO, session handling
-    printf("Setting RNG Callback!");
+    printf("Setting RNG Callback!\n");
     mbedtls_ssl_conf_rng(&ssl_conf, mbedtls_ctr_drbg_random, &ctr_drbg);
-    printf("Setting Debug Callback!");
+    printf("Setting Debug Callback!\n");
     mbedtls_ssl_conf_dbg(&ssl_conf, my_debug, NULL);
 
     if ((ret = mbedtls_ssl_set_hostname(&ssl_ctx, "CityU_CS")) != 0) {
         printf(" failed\n ! mbedtls_ssl_set_hostname returned %d\n\n", ret);
     }
     else {
-        printf("Hostname is match!");
+        printf("Hostname is match!\n");
     }
-    printf("Setting communication function!");
+    printf("Setting communication function!\n");
     mbedtls_ssl_set_bio(&ssl_ctx, &server_ctx, mbedtls_net_send, mbedtls_net_recv, NULL);
-    printf("Setting Trusted CA chain!");
+    printf("Setting Trusted CA chain!\n");
     mbedtls_ssl_conf_ca_chain(&ssl_conf, &ca_cert, NULL);//mbedtls_x509_crt server_cert, ca_cert
     //config cipher suites
     mbedtls_ssl_conf_max_version(&ssl_conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_3);
@@ -171,7 +171,7 @@ int main() {
         printf("mbedtls_ssl_setup failed, error code is %d \n", ret);
     }
     else {
-        printf("Config is successfully loaded into ssl context");
+        printf("Config is successfully loaded into ssl context\n");
     }
     //Perform an SSL-handshake (SSL/TLS interface)
     //  ret = mbedtls_ssl_handshake(&ssl_ctx);
@@ -191,14 +191,14 @@ int main() {
         ret = mbedtls_ssl_write(&ssl_ctx, (unsigned char*)greeting, sizeof(greeting));
         ret = mbedtls_ssl_read(&ssl_ctx, msg_buf, 4096);
         //ret = mbedtls_net_recv(&client_ctx, msg_buf, 4096);
-        printf("Received Message from Server:");
+        printf("Received Message from Server:\n");
         for (int i = 0; i < ret; i++) {
             printf("%c",(char)msg_buf[i]);
         }
         printf("\n");
         count++;
     }
-    printf("3 send&receive is done, connection finished");
+    printf("3 send&receive is done, connection finished\n");
     mbedtls_net_free(&server_ctx);
     mbedtls_net_free(&listening_ctx);
     mbedtls_ssl_free(&ssl_ctx);
