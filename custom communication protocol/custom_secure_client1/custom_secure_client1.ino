@@ -56,7 +56,7 @@ void setup() {
   //Load the own cert
   printf( "\n  . Loading Own Cert..." );
 
-  ret = mbedtls_x509_crt_parse(&own_cert, (unsigned char *)server_cert_buf, sizeof(server_cert_buf) - 1);
+  ret = mbedtls_x509_crt_parse(&own_cert, (unsigned char *)server_cert_buf, sizeof(server_cert_buf));
   if (ret != 0) {
     printf( " failed\n  ! mbedtls_x509_crt_parse own cert returned % d(-0x % 04x)\n", ret, -ret);
   } else {
@@ -274,3 +274,4 @@ void setup() {
 void loop() {
 
 }
+
