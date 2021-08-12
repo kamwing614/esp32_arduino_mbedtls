@@ -1,7 +1,8 @@
-This contains a half completed custom communication protocol between two nodes:
+This a custom communication protocol between two nodes:
 
+the Key Establishment Protocol is as below:
 Node A(Client 1):
-3.6 is completed
+
   //1.receive the cert & RB (plaintext form)
   //2.verify the peer's cert, is it signed by trusted CA?
   //2.1 load the cert_buf into cert context
@@ -18,8 +19,9 @@ Node A(Client 1):
   //5. Key establishment using AF&BF
   //5.1 KC = SHA256(AF1||BF1)
   //5.2 KI = SHA256(AF2||BF2)
+  //5.3 IV = SHA256(AF2||BF2||AF1||BF1)
 
-Node B(Client 2): 3.5.2 is completed
+Node B(Client 2): 
 
   //1.send over the cert & RB (plaintext form)
   //1.1 generate RB
@@ -41,3 +43,8 @@ Node B(Client 2): 3.5.2 is completed
   //5. Key establishment using AF&BF
   //5.1 KC = SHA256(AF1||BF1)
   //5.2 KI = SHA256(AF2||BF2)
+  //5.3 IV = SHA256(AF2||BF2||AF1||BF1)
+
+After the key establishment,
+
+Use KC & IV to do aes-256-cbc encryption, Use KI to do HMAC
