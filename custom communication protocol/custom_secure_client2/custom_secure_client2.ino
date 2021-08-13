@@ -405,8 +405,23 @@ void setup() {
   mbedtls_md_init(&md_ctx);
   mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(md_type), 1);
   ret = mbedtls_md_hmac_starts(&md_ctx, ki, sizeof(ki) - 1);
+  if (ret != 0) {
+    Serial.println("Failed to Start the HMAC context working!");
+  } else {
+    Serial.println("HMAC context running...");
+  }
   ret = mbedtls_md_hmac_update(&md_ctx, secure_msg, sizeof(secure_msg));
+  if (ret != 0) {
+    Serial.println("Failed to load the payload into HMAC context for calculation");
+  } else {
+    Serial.println("Loaded Payload into the HMAC context for calculation");
+  }
   ret = mbedtls_md_hmac_finish(&md_ctx, hmac);
+  if (ret != 0) {
+    Serial.println("Failed to obtain the HMAC value from the HMAC context!");
+  } else {
+    Serial.println("Obtained the HMAC value from the HMAC context successfully!");
+  }
   Serial.println();
   Serial.println();
   Serial.println("FYI: The HMAC is:");

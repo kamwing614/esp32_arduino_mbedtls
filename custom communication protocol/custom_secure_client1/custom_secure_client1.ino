@@ -13,6 +13,7 @@ unsigned char ki[33], kc[33], iv[33];
 unsigned char secure_msg[1024];
 mbedtls_aes_context aes_ctx;
 char peer_cert_buf[2000];
+
 void setup() {
 
   unsigned char cipher[257];
@@ -53,7 +54,6 @@ void setup() {
   }
 
   // load own cert
-
   //initialize context
   mbedtls_x509_crt own_cert;
   mbedtls_x509_crt_init(&own_cert);
@@ -329,7 +329,7 @@ void setup() {
   }
   Serial.println();
   Serial.println();
-  
+
   //4.4 check received RA and Sent RA
   ret = is_same(ra, received_ra, sizeof(ra));
   if (ret == 0) {
@@ -430,9 +430,25 @@ void setup() {
   mbedtls_md_init(&md_ctx);
   mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(md_type), 1);
   ret = mbedtls_md_hmac_starts(&md_ctx, ki, sizeof(ki) - 1);
+  if (ret != 0) {
+    Serial.println("Failed to Start the HMAC context working!");
+  } else {
+    Serial.println("HMAC context running...");
+  }
   ret = mbedtls_md_hmac_update(&md_ctx, secure_msg, sizeof(secure_msg));
+  if (ret != 0) {
+    Serial.println("Failed to load the payload into HMAC context for calculation");
+  } else {
+    Serial.println("Loaded Payload into the HMAC context for calculation");
+  }
   ret = mbedtls_md_hmac_finish(&md_ctx, hmac_check);
+  if (ret != 0) {
+    Serial.println("Failed to obtain the HMAC value from the HMAC context!");
+  } else {
+    Serial.println("Obtained the HMAC value from the HMAC context successfully!");
+  }
 
+  //verifying the HMAC 
   ret = is_same(hmac_check, hmac, sizeof(hmac));
   if (ret == 0) {
     Serial.println("The HMAC is not match!");
