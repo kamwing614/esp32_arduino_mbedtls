@@ -168,7 +168,7 @@ void setup() {
   //set the key for decryption
   mbedtls_aes_setkey_dec( &aes_ctx, kc, 256 );
   //start of decryption
-  mbedtls_aes_crypt_cbc( &aes_ctx, MBEDTLS_AES_DECRYPT, 1024, iv, secure_msg, secure_msg );
+  mbedtls_aes_crypt_cbc( &aes_ctx, MBEDTLS_AES_DECRYPT, sizeof(secure_msg), iv, secure_msg, secure_msg );
 
   Serial.println("Message is decrypted, it is as below:");
   for (int i = 0; i < sizeof(secure_msg); i++) {
@@ -422,10 +422,7 @@ int handshake_nodeA(mbedtls_net_context *peer_ctx, mbedtls_x509_crt* ca_cert,  m
   memset(&bf1[8],165,1);
   memset(&bf2[8],165,1);
   memset(&received_ra[8],165,1);
-  Serial.println("Empty BF1 is:");
-  for (int i = 0; i < sizeof(bf1); i++) {
-    Serial.printf("%d.", bf1[i]);
-  }
+
   Serial.println();
   Serial.println();
   ret = settle_token(plain_text, bf1, bf2, received_ra);
