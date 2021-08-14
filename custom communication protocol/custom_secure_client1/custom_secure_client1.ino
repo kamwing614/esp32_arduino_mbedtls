@@ -16,8 +16,6 @@ char peer_cert_buf[2000];
 
 void setup() {
 
-  unsigned char cipher[257];
-  unsigned char signature[257];
 
   const char* ssid = "TP-Link_82F4";
   const char* password =  "31208499";
@@ -132,258 +130,11 @@ void setup() {
   }
   Serial.println();
 
-
-  //-------------Authentication&&Handshake&&Key Establishment--------------//
-
-
-
-  //1.receive the cert & RB (plaintext form)
+  //handshake
+  ret = handshake_nodeA(&peer_ctx, &ca_cert , &ctr_drbg, rsa_own, ki, kc, iv);
 
 
-  unsigned char  rb[9];
-  ret = mbedtls_net_recv(&peer_ctx, (unsigned char*)peer_cert_buf, sizeof(peer_cert_buf));// this ought to be the cert
-  Serial.println("Received the Peer's cert.");
-  ret = mbedtls_net_recv(&peer_ctx, rb, sizeof(rb));
-  Serial.println("Received the RB.");
-  Serial.println();
-
-  Serial.println("RB is:");
-  for (int i = 0; i < sizeof(rb); i++) {
-    Serial.printf("%d.", rb[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  //2.verify the peer's cert, is it signed by trusted CA?
-  //2.1 load the cert_buf into cert context
-  mbedtls_x509_crt peer_cert;
-  mbedtls_x509_crt_init(&peer_cert);
-  ret = mbedtls_x509_crt_parse(&peer_cert, (unsigned char *)peer_cert_buf, sizeof(peer_cert_buf));
-  if (ret != 0) {
-    printf( "\nFailed! mbedtls_x509_crt_parse PEER's Cert returned % d(-0x % 04x)\n", ret, -ret);
-  } else {
-    printf( "Successfully Parsed PEER's cert \n" );
-  }
-
-  //2.2 verify the cert. Is it signed by trusted CA?
-  uint32_t flags;
-  bool peer_cert_ok = false;
-  ret = mbedtls_x509_crt_verify  ( &peer_cert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
-  if (ret == 0) {
-    Serial.println("PEER's cert is verified");
-    peer_cert_ok = true;
-  } else {
-    Serial.println("PEER's cert is not verified.");
-    Serial.printf("ERROR CODE return: %d (%x)", ret, ret);
-    Serial.printf("ERROR CODE flag: %d (%x)", flags, flags);
-  }
-  Serial.println();
-
-  //3.send the cert( AF1||AF2||RA||RB )encrypted by peer's cert && ( AF1||AF2||RA||RB )signed by own cert
-  //3.1 extract the public key from peer's cert
-  mbedtls_rsa_context* rsa_peer_cert = mbedtls_pk_rsa(peer_cert.pk);
-
-  //3.2generate af1,af2,ra
-  unsigned char ra[9], af1[9], af2[9] ;
-  //af1
-  ret = mbedtls_ctr_drbg_random(&ctr_drbg, af1, 8);
-  if (ret != 0) {
-    Serial.println("AF1 Generation Failed");
-  } else {
-    Serial.println("AF1 is generated!");
-  }
-
-  Serial.println("AF1 is:");
-  for (int i = 0; i < sizeof(af1); i++) {
-    Serial.printf("%d.", af1[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  //af2
-  ret = mbedtls_ctr_drbg_random(&ctr_drbg, af2, 8);
-  if (ret != 0) {
-    Serial.println("AF2 Generation Failed");
-  } else {
-    Serial.println("AF2 is generated!");
-  }
-  Serial.println("AF2 is:");
-  for (int i = 0; i < sizeof(af2); i++) {
-    Serial.printf("%d.", af2[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  //ra
-  ret = mbedtls_ctr_drbg_random(&ctr_drbg, ra, 8);
-  if (ret != 0) {
-    Serial.println("RA Generation Failed");
-  } else {
-    Serial.println("RA is generated!");
-  }
-  Serial.println("RA is:");
-  for (int i = 0; i < sizeof(ra); i++) {
-    Serial.printf("%d.", ra[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  //3.3concatengate af1,af2,ra,rb in the form of (8bytes||8bytes||8bytes||8bytes)
-  unsigned char msg[256];
-  memset(msg, 0, sizeof(msg) - 1);
-  memcpy(&msg[0], af1, 8);
-  memcpy(&msg[8], af2, 8);
-  memcpy(&msg[16], ra, 8);
-  memcpy(&msg[24], rb, 8);
-  Serial.println("The msg ( AF1||AF2||RA||RB ) being encrypted and then sent is:");
-  for (int i = 0; i < sizeof(msg); i++) {
-    Serial.printf("%d.", msg[i]);
-  }
-  Serial.println();
-
-  //3.4 encrypt the msg
-
-
-  ret = mbedtls_rsa_pkcs1_encrypt(rsa_peer_cert, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_RSA_PUBLIC, strlen((const char*)msg), msg, cipher);
-  if (ret == 0) {
-    Serial.println("\nEncryption of (AF1||AF2||RA||RB) is successful.");
-  } else {
-    Serial.printf("\nEncryption of (AF1||AF2||RA||RB) is failed. Return code is: %d(-0x%04x)\n", ret, -ret);
-  }
-  //3.5 sign the message
-  //rsa_own represents own rsa key pairs. It is loaded above
-
-
-  ret = mbedtls_rsa_pkcs1_sign(rsa_own, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, strlen((const char*)msg), msg, signature);
-  if (ret != 0) {
-    Serial.printf( "\n  Signing Failed mbedtls_rsa_pkcs1_sign returned %d(-0x%04x)\n", ret, -ret);
-  } else {
-    Serial.println("Successfully signed (AF1||AF2||RA||RB)");
-  }
-  Serial.println();
-
-  //3.6 send the cert, cipher, signature
-  ret = mbedtls_net_send(&peer_ctx, (const unsigned char*)server_cert_buf, sizeof(server_cert_buf));
-  Serial.println("sent my cert");
-  ret = mbedtls_net_send(&peer_ctx, (const unsigned char*)cipher, sizeof(cipher));
-  Serial.println("sent cipher");
-  ret = mbedtls_net_send(&peer_ctx, (const unsigned char*)signature, sizeof(signature));
-  Serial.println("sent signature");
-  Serial.println();
-
-  //4.receive  ( BF1 || BF2 || RA ) encrypted using my cert || (BF1||BF2||RA) sign with peer cert
-  ret = mbedtls_net_recv(&peer_ctx, cipher, sizeof(cipher));
-  Serial.println("received cipher");
-  ret = mbedtls_net_recv(&peer_ctx, signature, sizeof(signature));
-  Serial.println("received signature");
-  Serial.println();
-
-  //4.1 decrypt the message to get (BF1||BF2||RA)
-  Serial.println("Decryption Starts...");
-  size_t olen; //store the length of the plaintext
-  unsigned char plain_text[256];
-  ret = mbedtls_rsa_pkcs1_decrypt(rsa_own, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_RSA_PRIVATE, &olen, cipher, plain_text, sizeof(plain_text));
-  if (ret != 0) {
-    Serial.printf( "failed\n  ! mbedtls_rsa_pkcs1_decrypt returned %d(-0x%04x)\n", ret, -ret);
-  } else {
-    Serial.printf( "The RSA decryption is finished successfully.\n" );
-  }
-  Serial.println("The decrypted ( BF1||BF2||RA ) is:");
-  for (int i = 0; i < sizeof(plain_text); i++) {
-    Serial.printf("%d.", plain_text[i]);
-  }
-  Serial.println();
-
-  //4.2 verify the signature
-  Serial.println("Verifying Signature...");
-  ret = mbedtls_rsa_pkcs1_verify(rsa_peer_cert, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, strlen((const char*)plain_text), plain_text, signature);
-
-  if (ret != 0) {
-    Serial.printf( " failed\n  ! mbedtls_rsa_pkcs1_verify returned %d(-0x%04x)\n", ret, -ret);
-  } else {
-    Serial.printf( " the signature of ENC( BF1||BF2||RA )is verified ok\n" );
-  }
-
-  //4.3 Settle ( BF1||BF2||RA )
-  Serial.println("Separating BF1||BF2||RA");
-  unsigned char bf1[9], bf2[9], received_ra[9];
-  ret = settle_token(plain_text, bf1, bf2, received_ra);
-
-  Serial.println("BF1 is:");
-  for (int i = 0; i < sizeof(bf1); i++) {
-    Serial.printf("%d.", bf1[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  Serial.println("BF2 is:");
-  for (int i = 0; i < sizeof(bf2); i++) {
-    Serial.printf("%d.", bf2[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  Serial.println("RA is:");
-  for (int i = 0; i < sizeof(ra); i++) {
-    Serial.printf("%d.", ra[i]);
-  }
-  Serial.println();
-  Serial.println();
-
-  //4.4 check received RA and Sent RA
-  ret = is_same(ra, received_ra, sizeof(ra));
-  if (ret == 0) {
-    Serial.println("RA Mismatch!");
-  } else {
-    Serial.println("RA is match!");
-  }
-
-  //5. Key establishment using AF&BF
-
-  mbedtls_md_context_t md_ctx;
-  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-  mbedtls_md_init(&md_ctx);
-  mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(md_type), 0);
-  //concatenate AF1||BF1
-
-  unsigned char key_aes[17];
-  memset(key_aes, 0, 17);
-  memcpy(&key_aes[0], af1, 8);
-  memcpy(&key_aes[8], bf1, 8);
-
-
-  unsigned char key_hmac[17];
-  memset(key_hmac, 0, 17);
-  memcpy(&key_hmac[0], af2, 8);
-  memcpy(&key_hmac[8], bf2, 8);
-
-  unsigned char iv_material[33];
-  memset(iv_material, 0, 32);
-  memcpy(&iv_material[0], af2, 8);
-  memcpy(&iv_material[8], bf2, 8);
-  memcpy(&iv_material[16], af1, 8);
-  memcpy(&iv_material[24], bf1, 8);
-
-  //5.1 KC = SHA256(AF1||BF1)
-  mbedtls_md_starts(&md_ctx);
-  mbedtls_md_update(&md_ctx, (const unsigned char *) key_aes, sizeof(key_aes));
-  mbedtls_md_finish(&md_ctx, kc);
-
-
-  //5.2 KI = SHA256(AF2||BF2)
-  mbedtls_md_starts(&md_ctx);
-  mbedtls_md_update(&md_ctx, (const unsigned char *) key_hmac, sizeof(key_hmac));
-  mbedtls_md_finish(&md_ctx, ki);
-
-  //5.2 iv = SHA256(AF2||BF2||AF1||BF1)
-  mbedtls_md_starts(&md_ctx);
-  mbedtls_md_update(&md_ctx, (const unsigned char *) iv_material, sizeof(iv_material));
-  mbedtls_md_finish(&md_ctx, iv);
-
-  mbedtls_md_free(&md_ctx);
-
-  //-------------End of Authentication&&Handshake&&Key Establishment--------------//
-
+  //hanshake done
   //show the KEY Establishment Result//
   Serial.println("The KC is:");
   for (int i = 0; i < 32; i++) {
@@ -427,6 +178,9 @@ void setup() {
 
   Serial.println("\nVerifying the HMAC of the message...");
   unsigned char hmac_check[33];
+  mbedtls_md_context_t md_ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+
   mbedtls_md_init(&md_ctx);
   mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(md_type), 1);
   ret = mbedtls_md_hmac_starts(&md_ctx, ki, sizeof(ki) - 1);
@@ -448,7 +202,7 @@ void setup() {
     Serial.println("Obtained the HMAC value from the HMAC context successfully!");
   }
 
-  //verifying the HMAC 
+  //verifying the HMAC
   ret = is_same(hmac_check, hmac, sizeof(hmac));
   if (ret == 0) {
     Serial.println("The HMAC is not match!");
@@ -485,6 +239,280 @@ int settle_token(unsigned char* msg, unsigned char *a, unsigned char *b, unsigne
 
   return 0;
 }
+
+int handshake_nodeA(mbedtls_net_context *peer_ctx, mbedtls_x509_crt* ca_cert,  mbedtls_ctr_drbg_context* ctr_drbg, mbedtls_rsa_context *rsa_own, unsigned char *ki, unsigned char *kc, unsigned char *iv) {
+
+  //-------------Authentication&&Handshake&&Key Establishment--------------//
+  //1.receive the cert & RB (plaintext form)
+
+  int ret;
+  unsigned char  rb[9];
+  memset(&rb[8], 165, 1);
+  ret = mbedtls_net_recv(peer_ctx, (unsigned char*)peer_cert_buf, sizeof(peer_cert_buf));// this ought to be the cert
+  Serial.println("Received the Peer's cert.");
+  ret = mbedtls_net_recv(peer_ctx, rb, sizeof(rb));
+  Serial.println("Received the RB.");
+  Serial.println();
+
+  Serial.println("RB is:");
+  for (int i = 0; i < sizeof(rb); i++) {
+    Serial.printf("%d.", rb[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  //2.verify the peer's cert, is it signed by trusted CA?
+  //2.1 load the cert_buf into cert context
+  mbedtls_x509_crt peer_cert;
+  mbedtls_x509_crt_init(&peer_cert);
+  ret = mbedtls_x509_crt_parse(&peer_cert, (unsigned char *)peer_cert_buf, sizeof(peer_cert_buf));
+  if (ret != 0) {
+    printf( "\nFailed! mbedtls_x509_crt_parse PEER's Cert returned % d(-0x % 04x)\n", ret, -ret);
+  } else {
+    printf( "Successfully Parsed PEER's cert \n" );
+  }
+
+  //2.2 verify the cert. Is it signed by trusted CA?
+  uint32_t flags;
+  bool peer_cert_ok = false;
+  ret = mbedtls_x509_crt_verify  ( &peer_cert, ca_cert, NULL, NULL, &flags, NULL, NULL);
+  if (ret == 0) {
+    Serial.println("PEER's cert is verified");
+    peer_cert_ok = true;
+  } else {
+    Serial.println("PEER's cert is not verified.");
+    Serial.printf("ERROR CODE return: %d (%x)", ret, ret);
+    Serial.printf("ERROR CODE flag: %d (%x)", flags, flags);
+  }
+  Serial.println();
+
+  //3.send the cert( AF1||AF2||RA||RB )encrypted by peer's cert && ( AF1||AF2||RA||RB )signed by own cert
+  //3.1 extract the public key from peer's cert
+  mbedtls_rsa_context* rsa_peer_cert = mbedtls_pk_rsa(peer_cert.pk);
+
+  //3.2generate af1,af2,ra
+  unsigned char ra[9], af1[9], af2[9] ;
+  memset(&ra[8], 165, 1);
+  memset(&af1[8], 165, 1);
+  memset(&af2[8], 165, 1);
+  //af1
+  ret = mbedtls_ctr_drbg_random(ctr_drbg, af1, 8);
+  if (ret != 0) {
+    Serial.println("AF1 Generation Failed");
+  } else {
+    Serial.println("AF1 is generated!");
+  }
+
+  Serial.println("AF1 is:");
+  for (int i = 0; i < sizeof(af1); i++) {
+    Serial.printf("%d.", af1[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  //af2
+  ret = mbedtls_ctr_drbg_random(ctr_drbg, af2, 8);
+  if (ret != 0) {
+    Serial.println("AF2 Generation Failed");
+  } else {
+    Serial.println("AF2 is generated!");
+  }
+  Serial.println("AF2 is:");
+  for (int i = 0; i < sizeof(af2); i++) {
+    Serial.printf("%d.", af2[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  //ra
+  ret = mbedtls_ctr_drbg_random(ctr_drbg, ra, 8);
+  if (ret != 0) {
+    Serial.println("RA Generation Failed");
+  } else {
+    Serial.println("RA is generated!");
+  }
+  Serial.println("RA is:");
+  for (int i = 0; i < sizeof(ra); i++) {
+    Serial.printf("%d.", ra[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  //3.3concatengate af1,af2,ra,rb in the form of (8bytes||8bytes||8bytes||8bytes)
+  unsigned char msg[256];
+  memset(msg, 0, sizeof(msg) - 1);
+  memcpy(&msg[0], af1, 8);
+  memcpy(&msg[8], af2, 8);
+  memcpy(&msg[16], ra, 8);
+  memcpy(&msg[24], rb, 8);
+  Serial.println("The msg ( AF1||AF2||RA||RB ) being encrypted and then sent is:");
+  for (int i = 0; i < sizeof(msg); i++) {
+    Serial.printf("%d.", msg[i]);
+  }
+  Serial.println();
+
+  //3.4 encrypt the msg
+
+  unsigned char cipher[257];
+  unsigned char signature[257];
+
+  ret = mbedtls_rsa_pkcs1_encrypt(rsa_peer_cert, mbedtls_ctr_drbg_random, ctr_drbg, MBEDTLS_RSA_PUBLIC, strlen((const char*)msg), msg, cipher);
+  if (ret == 0) {
+    Serial.println("\nEncryption of (AF1||AF2||RA||RB) is successful.");
+  } else {
+    Serial.printf("\nEncryption of (AF1||AF2||RA||RB) is failed. Return code is: %d(-0x%04x)\n", ret, -ret);
+  }
+  //3.5 sign the message
+  //rsa_own represents own rsa key pairs. It is loaded above
+
+
+  ret = mbedtls_rsa_pkcs1_sign(rsa_own, mbedtls_ctr_drbg_random, ctr_drbg, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, strlen((const char*)msg), msg, signature);
+  if (ret != 0) {
+    Serial.printf( "\n  Signing Failed mbedtls_rsa_pkcs1_sign returned %d(-0x%04x)\n", ret, -ret);
+  } else {
+    Serial.println("Successfully signed (AF1||AF2||RA||RB)");
+  }
+  Serial.println();
+
+  //3.6 send the cert, cipher, signature
+  ret = mbedtls_net_send(peer_ctx, (const unsigned char*)server_cert_buf, sizeof(server_cert_buf));
+  Serial.println("sent my cert");
+  ret = mbedtls_net_send(peer_ctx, (const unsigned char*)cipher, sizeof(cipher));
+  Serial.println("sent cipher");
+  ret = mbedtls_net_send(peer_ctx, (const unsigned char*)signature, sizeof(signature));
+  Serial.println("sent signature");
+  Serial.println();
+
+  //4.receive  ( BF1 || BF2 || RA ) encrypted using my cert || (BF1||BF2||RA) sign with peer cert
+  ret = mbedtls_net_recv(peer_ctx, cipher, sizeof(cipher));
+  Serial.println("received cipher");
+  ret = mbedtls_net_recv(peer_ctx, signature, sizeof(signature));
+  Serial.println("received signature");
+  Serial.println();
+
+  //4.1 decrypt the message to get (BF1||BF2||RA)
+  Serial.println("Decryption Starts...");
+  size_t olen; //store the length of the plaintext
+  unsigned char plain_text[256];
+  ret = mbedtls_rsa_pkcs1_decrypt(rsa_own, mbedtls_ctr_drbg_random, ctr_drbg, MBEDTLS_RSA_PRIVATE, &olen, cipher, plain_text, sizeof(plain_text));
+  if (ret != 0) {
+    Serial.printf( "failed\n  ! mbedtls_rsa_pkcs1_decrypt returned %d(-0x%04x)\n", ret, -ret);
+  } else {
+    Serial.printf( "The RSA decryption is finished successfully.\n" );
+  }
+  Serial.println("The decrypted ( BF1||BF2||RA ) is:");
+  for (int i = 0; i < sizeof(plain_text); i++) {
+    Serial.printf("%d.", plain_text[i]);
+  }
+  Serial.println();
+
+  //4.2 verify the signature
+  Serial.println("Verifying Signature...");
+  ret = mbedtls_rsa_pkcs1_verify(rsa_peer_cert, mbedtls_ctr_drbg_random, ctr_drbg, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, strlen((const char*)plain_text), plain_text, signature);
+
+  if (ret != 0) {
+    Serial.printf( " failed\n  ! mbedtls_rsa_pkcs1_verify returned %d(-0x%04x)\n", ret, -ret);
+  } else {
+    Serial.printf( " the signature of ENC( BF1||BF2||RA )is verified ok\n" );
+  }
+
+  //4.3 Settle ( BF1||BF2||RA )
+  Serial.println("Separating BF1||BF2||RA");
+  unsigned char bf1[9], bf2[9], received_ra[9];
+  memset(&bf1[8],165,1);
+  memset(&bf2[8],165,1);
+  memset(&received_ra[8],165,1);
+  Serial.println("Empty BF1 is:");
+  for (int i = 0; i < sizeof(bf1); i++) {
+    Serial.printf("%d.", bf1[i]);
+  }
+  Serial.println();
+  Serial.println();
+  ret = settle_token(plain_text, bf1, bf2, received_ra);
+
+  Serial.println("BF1 is:");
+  for (int i = 0; i < sizeof(bf1); i++) {
+    Serial.printf("%d.", bf1[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  Serial.println("BF2 is:");
+  for (int i = 0; i < sizeof(bf2); i++) {
+    Serial.printf("%d.", bf2[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  Serial.println("RA is:");
+  for (int i = 0; i < sizeof(ra); i++) {
+    Serial.printf("%d.", ra[i]);
+  }
+
+  Serial.println("Received RA is:");
+  for (int i = 0; i < sizeof(received_ra); i++) {
+    Serial.printf("%d.", ra[i]);
+  }
+  Serial.println();
+  Serial.println();
+
+  //4.4 check received RA and Sent RA
+  ret = is_same(ra, received_ra, sizeof(ra));
+  if (ret == 0) {
+    Serial.println("RA Mismatch!");
+  } else {
+    Serial.println("RA is match!");
+  }
+
+  //5. Key establishment using AF&BF
+
+  mbedtls_md_context_t md_ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+  mbedtls_md_init(&md_ctx);
+  mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(md_type), 0);
+  //concatenate AF1||BF1
+
+  unsigned char key_aes[17];
+  memset(key_aes, 0, 17);
+  memcpy(&key_aes[0], af1, 8);
+  memcpy(&key_aes[8], bf1, 8);
+
+
+  unsigned char key_hmac[17];
+  memset(key_hmac, 0, 17);
+  memcpy(&key_hmac[0], af2, 8);
+  memcpy(&key_hmac[8], bf2, 8);
+
+  unsigned char iv_material[33];
+  memset(iv_material, 0, 32);
+  memset(&iv_material[32],165,1);
+  memcpy(&iv_material[0], af2, 8);
+  memcpy(&iv_material[8], bf2, 8);
+  memcpy(&iv_material[16], af1, 8);
+  memcpy(&iv_material[24], bf1, 8);
+
+  //5.1 KC = SHA256(AF1||BF1)
+  mbedtls_md_starts(&md_ctx);
+  mbedtls_md_update(&md_ctx, (const unsigned char *) key_aes, sizeof(key_aes));
+  mbedtls_md_finish(&md_ctx, kc);
+
+
+  //5.2 KI = SHA256(AF2||BF2)
+  mbedtls_md_starts(&md_ctx);
+  mbedtls_md_update(&md_ctx, (const unsigned char *) key_hmac, sizeof(key_hmac));
+  mbedtls_md_finish(&md_ctx, ki);
+
+  //5.2 iv = SHA256(AF2||BF2||AF1||BF1)
+  mbedtls_md_starts(&md_ctx);
+  mbedtls_md_update(&md_ctx, (const unsigned char *) iv_material, sizeof(iv_material));
+  mbedtls_md_finish(&md_ctx, iv);
+
+  mbedtls_md_free(&md_ctx);
+
+  //-------------End of Authentication&&Handshake&&Key Establishment--------------//
+  return ret;
+}
+
 
 //check two buffer the same. 0 for true,1 for false
 int is_same(unsigned char *buf1, unsigned char *buf2, int len) {
